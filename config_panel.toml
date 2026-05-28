@@ -110,3 +110,18 @@ help.fr = "Ici tu peux simplement changer des paramètres de ta Gitea instance"
         help.de = "Webhook kann nur erlaubte Hosts ansprechen. Durch Komma separierte Liste (beispiel.de,anderesbeispiel.de)."
         help.fr = "Pour des raisons de sécurité, le webhook ne peut appeler que les hôtes autorisés. Liste séparée par des virgules (example.fr, autreexample.fr)."
         type = "string"
+
+    [main.lfs]
+    name.en = "Git LSF support"
+        
+        [main.lfs.lfs_enable]
+        ask.en = "Enable LFS support on this instance"
+        type = "boolean"
+        yes = "true"
+        no = "false"
+
+        [main.lfs.lfs_ssh_support]
+        ask.en = "Enable support hover SSH protocol"
+        type = "boolean"
+        yes = "true"
+        no = "false"
