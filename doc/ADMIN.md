@@ -28,28 +28,7 @@ Host __DOMAIN__
 ```
 
 ## LFS setup
-
-To use a repository with an `LFS` setup, you need to activate it on `__INSTALL_DIR__/custom/conf/app.ini`
-
-```ini
-[server]
-LFS_START_SERVER = true
-LFS_HTTP_AUTH_EXPIRY = 20m
-```
-
-By default, NGINX is configured with a maximum value for uploading files at 200 MB. It's possible to change this value on `/etc/nginx/conf.d/__DOMAIN__.d/__APP__.conf`.
-
-```nginx
-client_max_body_size 200M;
-```
-
-Don't forget to restart Gitea:
-
-```bash
-sudo systemctl restart __APP__.service.
-```
-
-> These settings are restored to the default configuration when updating Gitea. Remember to restore your configuration after all updates.
+You can enable the LFS setup on your admin application.
 
 ## Upgrade
 

@@ -45,4 +45,7 @@ set_settings_default() {
 
     ynh_app_setting_set_default --key=actions_enabled --value=false
     ynh_app_setting_set_default --key=webhook_allowed_hosts --value=""
+
+    ynh_app_setting_set_default --key=lfs_enable --value=true
+    ynh_app_setting_set_default --key=lfs_ssh_support --value=false
 }
