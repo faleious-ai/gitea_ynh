@@ -7,7 +7,7 @@ name = "Gitea"
 description.en = "Lightweight Git forge"
 description.fr = "Forge Git légère"
 
-version = "1.26.2~ynh1"
+version = "1.26.4~ynh1"
 
 maintainers = ["Josué Tille"]
 # previous_maintainers = [
@@ -68,14 +68,14 @@ ram.runtime = "100M"
     extract = false
     rename = "gitea"
 
-    armhf.url = "https://github.com/go-gitea/gitea/releases/download/v1.26.2/gitea-1.26.2-linux-arm-6"
-    armhf.sha256 = "15671c6ab763d59dff46e7d1ead14c71e65d066b3c93616d8502e7222a93ceea"
-    arm64.url = "https://github.com/go-gitea/gitea/releases/download/v1.26.2/gitea-1.26.2-linux-arm64"
-    arm64.sha256 = "1a87e279f4d09bfe532489ea7c6b345d67e0c8d7f688e5d63f0d6f57c716dcd3"
-    i386.url = "https://github.com/go-gitea/gitea/releases/download/v1.26.2/gitea-1.26.2-linux-386"
-    i386.sha256 = "7d2a50d15397481c2efd3ce2ebfa4b42dfbeac71ab8e045294a8a2143a422840"
-    amd64.url = "https://github.com/go-gitea/gitea/releases/download/v1.26.2/gitea-1.26.2-linux-amd64"
-    amd64.sha256 = "5b37937b625de69196748f7293eee1a7363f8637ae6e3da3c359bb380bd61a6a"
+    armhf.url = "https://github.com/go-gitea/gitea/releases/download/v1.26.4/gitea-1.26.4-linux-arm-6"
+    armhf.sha256 = "c7e6c930bb8ab17fef552f2a0600fa5e5251f3229117a19c18a6a802feef5881"
+    arm64.url = "https://github.com/go-gitea/gitea/releases/download/v1.26.4/gitea-1.26.4-linux-arm64"
+    arm64.sha256 = "3ab3fac656cb6ebcc0024e46be0825112ae6a156f1f2c8ad7b09e45ded5d3f02"
+    i386.url = "https://github.com/go-gitea/gitea/releases/download/v1.26.4/gitea-1.26.4-linux-386"
+    i386.sha256 = "66ecf69b069f5ea8e65098870336fb539d6513a2e8a4d925802307cc10d1ac28"
+    amd64.url = "https://github.com/go-gitea/gitea/releases/download/v1.26.4/gitea-1.26.4-linux-amd64"
+    amd64.sha256 = "0faa36d151918f8f7d6e0f3ae67597d1c338583d695add146ac393109d0fc44a"
 
     autoupdate.strategy = "latest_github_release"
     autoupdate.asset.armhf = "^gitea-.*-linux-arm-6$"
