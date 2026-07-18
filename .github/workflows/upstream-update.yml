@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
   push:
     paths:
+      - manifest.toml
       - tools/update_upstream.py
       - tools/validate_package.py
       - .github/workflows/upstream-update.yml
