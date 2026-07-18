@@ -13,32 +13,39 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "manifest.toml"
-API = "https://api.github.com/repos/go-gitea/gitea/releases/latest"
-ASSETS = {
-    "amd64": re.compile(r"^gitea-(?P<version>\d+\.\d+\.\d+)-linux-amd64$"),
-    "i386": re.compile(r"^gitea-(?P<version>\d+\.\d+\.\d+)-linux-386$"),
-    "arm64": re.compile(r"^gitea-(?P<version>\d+\.\d+\.\d+)-linux-arm64$"),
-    "armhf": re.compile(r"^gitea-(?P<version>\d+\.\d+\.\d+)-linux-arm-6$"),
+RELEASE_API = "https://api.github.com/repos/go-gitea/gitea/releases/latest"
+DOWNLOAD_ROOT = "https://dl.gitea.com/gitea"
+ASSET_NAMES = {
+    "amd64": "gitea-{version}-linux-amd64",
+    "i386": "gitea-{version}-linux-386",
+    "arm64": "gitea-{version}-linux-arm64",
+    "armhf": "gitea-{version}-linux-arm-6",
 }
 
 
+def request(url: str) -> urllib.response.addinfourl:
+    headers = {
+        "Accept": "application/vnd.github+json" if "api.github.com" in url else "application/octet-stream",
+        "User-Agent": "gitea-ynh-updater",
+    }
+    if "api.github.com" in url and os.getenv("GITHUB_TOKEN"):
+        headers["Authorization"] = f"Bearer {os.environ['GITHUB_TOKEN']}"
+    return urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=180)
+
+
 def request_json(url: str) -> dict:
-    request = urllib.request.Request(
-        url,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "gitea-ynh-updater",
-            **({"Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}"} if os.getenv("GITHUB_TOKEN") else {}),
-        },
-    )
-    with urllib.request.urlopen(request, timeout=60) as response:
+    with request(url) as response:
         return json.load(response)
 
 
+def request_text(url: str) -> str:
+    with request(url) as response:
+        return response.read().decode("utf-8")
+
+
 def download(url: str, destination: Path) -> str:
-    request = urllib.request.Request(url, headers={"User-Agent": "gitea-ynh-updater"})
     digest = hashlib.sha256()
-    with urllib.request.urlopen(request, timeout=180) as response, destination.open("wb") as output:
+    with request(url) as response, destination.open("wb") as output:
         while chunk := response.read(1024 * 1024):
             output.write(chunk)
             digest.update(chunk)
@@ -72,33 +79,39 @@ def verify_sigstore(binary: Path, bundle: Path) -> None:
 
 
 def main() -> int:
-    release = request_json(API)
+    release = request_json(RELEASE_API)
     tag = str(release.get("tag_name", ""))
     if release.get("draft") or release.get("prerelease") or not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
         raise RuntimeError(f"latest release is not a stable semver release: {tag!r}")
     version = tag.removeprefix("v")
-    assets = {asset["name"]: asset["browser_download_url"] for asset in release.get("assets", [])}
+    version_tuple = tuple(map(int, version.split(".")))
 
-    selected: dict[str, tuple[str, str]] = {}
-    for architecture, matcher in ASSETS.items():
-        matches = [(name, url) for name, url in assets.items() if matcher.fullmatch(name)]
-        if len(matches) != 1:
-            raise RuntimeError(f"expected one {architecture} binary, found {[name for name, _ in matches]}")
-        selected[architecture] = matches[0]
+    selected = {
+        architecture: (
+            asset_name := template.format(version=version),
+            f"{DOWNLOAD_ROOT}/{version}/{asset_name}",
+        )
+        for architecture, template in ASSET_NAMES.items()
+    }
 
+    hashes: dict[str, str] = {}
     with tempfile.TemporaryDirectory(prefix="gitea-ynh-update-") as temp_dir:
         temp = Path(temp_dir)
-        hashes: dict[str, str] = {}
         for architecture, (name, url) in selected.items():
+            expected_line = request_text(f"{url}.sha256").strip()
+            expected_match = re.fullmatch(r"([0-9a-fA-F]{64})(?:\s+\*?\S+)?", expected_line)
+            if not expected_match:
+                raise RuntimeError(f"invalid upstream SHA-256 file for {name}: {expected_line!r}")
+            expected = expected_match.group(1).lower()
             binary = temp / name
-            hashes[architecture] = download(url, binary)
-            if tuple(map(int, version.split("."))) >= (1, 27, 0):
-                bundle_name = f"{name}.sigstore.json"
-                bundle_url = assets.get(bundle_name)
-                if not bundle_url:
-                    raise RuntimeError(f"missing Sigstore bundle {bundle_name}")
-                bundle = temp / bundle_name
-                download(bundle_url, bundle)
+            actual = download(url, binary)
+            if actual != expected:
+                raise RuntimeError(f"SHA-256 mismatch for {name}: expected {expected}, got {actual}")
+            hashes[architecture] = actual
+
+            if version_tuple >= (1, 27, 0):
+                bundle = temp / f"{name}.sigstore.json"
+                download(f"{url}.sigstore.json", bundle)
                 verify_sigstore(binary, bundle)
 
     text = MANIFEST.read_text(encoding="utf-8")
