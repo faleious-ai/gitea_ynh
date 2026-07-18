@@ -1,0 +1,41 @@
+name: Package validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate TOML and immutable sources
+        run: python3 tools/validate_package.py
+      - name: Compile maintenance tools
+        run: python3 -m py_compile tools/*.py
+      - name: Parse shell scripts
+        run: |
+          set -euo pipefail
+          for script in scripts/*; do bash -n "$script"; done
+      - name: Verify declared source hashes
+        run: |
+          python3 - <<'PY'
+          import hashlib, pathlib, tomllib, urllib.request
+          manifest = tomllib.loads(pathlib.Path('manifest.toml').read_text())
+          source = manifest['resources']['sources']['main']
+          for arch in manifest['integration']['architectures']:
+              item = source[arch]
+              request = urllib.request.Request(item['url'], headers={'User-Agent':'gitea-ynh-ci'})
+              digest = hashlib.sha256()
+              with urllib.request.urlopen(request, timeout=180) as response:
+                  while chunk := response.read(1024 * 1024): digest.update(chunk)
+              assert digest.hexdigest() == item['sha256'], arch
+              print(f'{arch}: verified')
+          PY
