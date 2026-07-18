@@ -2,45 +2,62 @@
 from __future__ import annotations
 
 import hashlib
-import json
-import os
 import re
 import shutil
 import subprocess
 import tempfile
+import urllib.parse
 import urllib.request
+from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "manifest.toml"
-RELEASE_API = "https://api.github.com/repos/go-gitea/gitea/releases/latest"
-DOWNLOAD_ROOT = "https://dl.gitea.com/gitea"
+DOWNLOAD_ROOT = "https://dl.gitea.com/gitea/"
 ASSET_NAMES = {
     "amd64": "gitea-{version}-linux-amd64",
     "i386": "gitea-{version}-linux-386",
     "arm64": "gitea-{version}-linux-arm64",
     "armhf": "gitea-{version}-linux-arm-6",
 }
+SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)/?$")
+
+
+class LinkCollector(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.hrefs: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != "a":
+            return
+        href = dict(attrs).get("href")
+        if href:
+            self.hrefs.append(href)
 
 
 def request(url: str) -> urllib.response.addinfourl:
-    headers = {
-        "Accept": "application/vnd.github+json" if "api.github.com" in url else "application/octet-stream",
-        "User-Agent": "gitea-ynh-updater",
-    }
-    if "api.github.com" in url and os.getenv("GITHUB_TOKEN"):
-        headers["Authorization"] = f"Bearer {os.environ['GITHUB_TOKEN']}"
+    headers = {"Accept": "application/octet-stream", "User-Agent": "gitea-ynh-updater"}
     return urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=180)
-
-
-def request_json(url: str) -> dict:
-    with request(url) as response:
-        return json.load(response)
 
 
 def request_text(url: str) -> str:
     with request(url) as response:
         return response.read().decode("utf-8")
+
+
+def latest_stable_version() -> str:
+    parser = LinkCollector()
+    parser.feed(request_text(DOWNLOAD_ROOT))
+    versions: list[tuple[tuple[int, int, int], str]] = []
+    for href in parser.hrefs:
+        candidate = urllib.parse.urlparse(href).path.rstrip("/").rsplit("/", 1)[-1]
+        match = SEMVER.fullmatch(candidate)
+        if match:
+            versions.append((tuple(map(int, match.groups())), candidate))
+    if not versions:
+        raise RuntimeError("official Gitea download index contains no stable semantic version")
+    return max(versions)[1]
 
 
 def download(url: str, destination: Path) -> str:
@@ -79,17 +96,12 @@ def verify_sigstore(binary: Path, bundle: Path) -> None:
 
 
 def main() -> int:
-    release = request_json(RELEASE_API)
-    tag = str(release.get("tag_name", ""))
-    if release.get("draft") or release.get("prerelease") or not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
-        raise RuntimeError(f"latest release is not a stable semver release: {tag!r}")
-    version = tag.removeprefix("v")
+    version = latest_stable_version()
     version_tuple = tuple(map(int, version.split(".")))
-
     selected = {
         architecture: (
             asset_name := template.format(version=version),
-            f"{DOWNLOAD_ROOT}/{version}/{asset_name}",
+            f"{DOWNLOAD_ROOT}{version}/{asset_name}",
         )
         for architecture, template in ASSET_NAMES.items()
     }
