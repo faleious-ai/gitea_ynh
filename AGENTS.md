@@ -24,6 +24,7 @@ Maintain the YunoHost package for the official Gitea server. The package tracks 
 - Patch and minor updates may be automated after validation. Major updates require review of breaking changes and database migrations.
 - Keep the Gitea/Runner compatibility note current.
 - Gitea 1.27+ reads `ALLOWED_HOST_LIST` from `[security]`; keep the package template there and ensure upgrades rewrite legacy `[webhook]` configuration through `ynh_config_add`.
+- The upstream updater must preserve the current `~ynhN` package revision when refreshing an upstream version or normalizing immutable pins.
 
 ## Required validation
 

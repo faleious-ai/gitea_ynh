@@ -22,6 +22,7 @@ ASSET_NAMES = {
     "armhf": "gitea-{version}-linux-arm-6",
 }
 SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)/?$")
+PACKAGE_REVISION = re.compile(r"^ynh\d+$")
 
 
 class LinkCollector(HTMLParser):
@@ -103,6 +104,14 @@ def current_pins(text: str) -> tuple[str, dict[str, dict[str, str]]]:
     return upstream_version, pins
 
 
+def package_revision(text: str) -> str:
+    package_version = str(tomllib.loads(text).get("version", ""))
+    _, separator, revision = package_version.partition("~")
+    if not separator or not PACKAGE_REVISION.fullmatch(revision):
+        raise RuntimeError(f"invalid package revision: {package_version!r}")
+    return revision
+
+
 def verify_sigstore(binary: Path, bundle: Path) -> None:
     cosign = shutil.which("cosign")
     if not cosign:
@@ -154,6 +163,7 @@ def main() -> int:
 
     text = MANIFEST.read_text(encoding="utf-8")
     current, pins = current_pins(text)
+    revision = package_revision(text)
     if version_key(current) > version_tuple:
         raise RuntimeError(f"refusing automated downgrade from {current} to {version}")
 
@@ -169,7 +179,7 @@ def main() -> int:
                 f"manual review required for {', '.join(changed_assets)}"
             )
 
-    updated = replace_field(text, "version", f"{version}~ynh1")
+    updated = replace_field(text, "version", f"{version}~{revision}")
     for architecture, (_, url) in selected.items():
         updated = replace_field(updated, f"{architecture}.url", url)
         updated = replace_field(updated, f"{architecture}.sha256", hashes[architecture])
