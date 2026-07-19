@@ -4,41 +4,39 @@ Last architecture update: 2026-07-19.
 
 ## Final package state
 
-- Package-code HEAD: `859f7489c9cb3c266338450001ab3483e8c2e3b9`.
-- Final package version: `1.27.0~ynh1`.
-- The updater discovered the stable upstream release, downloaded official versioned assets, verified SHA-256 files and verified the required Sigstore bundles. A second run reported `already-current 1.27.0` and produced no manifest diff.
-- The package uses `actions/checkout@v7.0.0`, `actions/setup-python@v6.3.0` and `sigstore/cosign-installer@v4.1.2` in both workflows.
+- Package-code HEAD: `9a2c9fcbe1861ecf876b4cdf06b92fa7757999b0`.
+- Final package version: `1.27.0~ynh2`.
+- Gitea remains pinned to stable upstream `1.27.0`; all four architecture assets retain official versioned URLs, SHA-256 values and Sigstore verification.
+- The updater preserves the current `~ynhN` package revision and remains idempotent when the upstream version is already current.
 
 ## Root cause and corrections
 
-- The original shell loop passed `scripts/login_source.sql` to `bash -n`; its SQL `NOW()` syntax produced exit code 2. The workflows now enumerate only non-SQL files, print each path, and preserve every intermediate failure.
-- The updater's field-replacement regex could consume blank lines and make its output unstable. It now matches horizontal whitespace only, preserving deterministic revisable diffs.
-- The multiline upgrade message was rewritten as an explicit `printf` command without changing its meaning.
-- The official YunoHost package linter is executed in CI from a clean checkout and fails on real linter errors.
+- Gitea 1.27 warned because the package template emitted `ALLOWED_HOST_LIST` under the deprecated `[webhook]` section. The key is now emitted under `[security]`, matching the upstream configuration contract.
+- Install, config-panel apply and upgrade use `ynh_config_add`, which rewrites the managed `app.ini` template and removes the legacy section on existing installations. The local validator now rejects a legacy `[webhook].ALLOWED_HOST_LIST` and requires the `[security]` location.
+- The updater previously reset maintenance revisions to `~ynh1`; it now preserves the existing package revision, allowing this compatibility fix to remain `~ynh2`.
 
 ## Commands and evidence
 
 Local Windows checks used the bundled Python runtime and Git Bash because `python3`, Docker and a WSL distribution were unavailable:
 
 ```text
-<bundled-python> -m py_compile tools/*.py
-find scripts -maxdepth 1 -type f ! -name '*.sql' -print0 | sort -z | while IFS= read -r -d '' script; do echo "Checking ${script}"; bash -n "$script"; done
-<bundled-python> tools/update_upstream.py
-<bundled-python> tools/update_upstream.py   # idempotence: already-current 1.27.0
+<bundled-python> tools/validate_package.py
+<bundled-python> -m compileall -q tools
+for script in scripts/*; do ...; bash -n $script; done
 ```
 
-The local checkout's CRLF conversion caused the standalone validator's line-ending warning; the exact validator and package-linter commands passed in the remote Linux workflow. The updater's four downloaded Gitea assets returned `Verified OK` from Cosign.
+Compilation and shell parsing passed locally. The standalone validator reported only the checkout's CRLF conversion; the exact validator, linter, source-hash and Sigstore commands passed in the remote Linux workflow. The full local Gitea updater could not complete because the Windows environment blocked the Cosign/network verification; the remote updater completed successfully.
 
 Validation runs for the package-code HEAD:
 
-- Package validation: [run 29695144595](https://github.com/faleious-ai/gitea_ynh/actions/runs/29695144595).
-- Update stable upstream release: [run 29695145421](https://github.com/faleious-ai/gitea_ynh/actions/runs/29695145421).
+- Package validation: [run 29697551505](https://github.com/faleious-ai/gitea_ynh/actions/runs/29697551505).
+- Update stable upstream release: [run 29697551535](https://github.com/faleious-ai/gitea_ynh/actions/runs/29697551535).
 
-Both runs were green. The package linter reported no error or critical failure; it emitted only its upstream warning about a known small bug. No Node.js 20 warning was present in the final logs.
+Both runs were green, including the official YunoHost package linter. No Node.js 20 warning was present.
 
 ## Required before production use
 
-On disposable YunoHost 12 infrastructure, still demonstrate fresh install, upgrade, login/API, repository push/clone, database/repository/SSH/LFS backup and restore, removal, URL change and reboot health.
+On disposable YunoHost 12 infrastructure, still demonstrate fresh install, upgrade from `1.27.0~ynh1`, login/API, repository push/clone, database/repository/SSH/LFS backup and restore, removal, URL change and reboot health.
 
 ## Current classification
 
