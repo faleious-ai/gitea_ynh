@@ -23,6 +23,7 @@ Maintain the YunoHost package for the official Gitea server. The package tracks 
 - Starting with Gitea 1.27, verify the upstream Sigstore bundle before publishing new hashes.
 - Patch and minor updates may be automated after validation. Major updates require review of breaking changes and database migrations.
 - Keep the Gitea/Runner compatibility note current.
+- Gitea 1.27+ reads `ALLOWED_HOST_LIST` from `[security]`; keep the package template there and ensure upgrades rewrite legacy `[webhook]` configuration through `ynh_config_add`.
 
 ## Required validation
 
@@ -42,6 +43,10 @@ procedure: clone the linter, create a virtual environment, install its
 `requirements.txt` and invoke `package_linter.py` against this package.
 
 A release is validated only after fresh install, upgrade from the previous packaged release, backup/restore, removal, HTTP/API checks and service health pass. Do not claim CI success without the exact workflow run and commit SHA.
+
+For configuration regressions, also confirm that `conf/app.ini` has no
+`ALLOWED_HOST_LIST` under `[webhook]` and that the package validator enforces
+the `[security]` location.
 
 ## Automation
 

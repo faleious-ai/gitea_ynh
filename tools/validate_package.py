@@ -51,6 +51,20 @@ def main() -> int:
         if not SHA256.fullmatch(digest):
             errors.append(f"invalid SHA-256 for {architecture}")
 
+    gitea_config = (ROOT / "conf/app.ini").read_text(encoding="utf-8")
+
+    def ini_section(name: str) -> str:
+        match = re.search(
+            rf"(?ms)^\[{re.escape(name)}\][ \t]*\r?\n(.*?)(?=^\[[^\]]+\][ \t]*$|\Z)",
+            gitea_config,
+        )
+        return match.group(1) if match else ""
+
+    if re.search(r"(?m)^[ \t]*ALLOWED_HOST_LIST[ \t]*=", ini_section("webhook")):
+        errors.append("ALLOWED_HOST_LIST must not remain in the deprecated [webhook] section")
+    if not re.search(r"(?m)^[ \t]*ALLOWED_HOST_LIST[ \t]*=", ini_section("security")):
+        errors.append("ALLOWED_HOST_LIST must be declared in the [security] section")
+
     for script in (ROOT / "scripts").iterdir():
         if script.is_file() and b"\r\n" in script.read_bytes():
             errors.append(f"CRLF line endings in {script.relative_to(ROOT)}")
