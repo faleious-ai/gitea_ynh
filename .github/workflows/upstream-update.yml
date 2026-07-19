@@ -22,20 +22,34 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.0
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6.3.0
         with:
           python-version: "3.12"
-      - uses: sigstore/cosign-installer@v3
+      - uses: sigstore/cosign-installer@v4.1.2
       - name: Resolve and verify newest stable release
         run: python3 tools/update_upstream.py
       - name: Validate generated package state
         run: |
+          set -euo pipefail
           python3 tools/validate_package.py
           python3 -m py_compile tools/*.py
-          for script in scripts/*; do bash -n "$script"; done
+          find scripts -maxdepth 1 -type f ! -name '*.sql' -print0 |
+            sort -z |
+            while IFS= read -r -d '' script; do
+              echo "Checking ${script}"
+              bash -n "$script"
+            done
+      - name: Run official YunoHost package linter
+        run: |
+          set -euo pipefail
+          linter_dir="$RUNNER_TEMP/package_linter"
+          git clone --depth 1 https://github.com/YunoHost/package_linter.git "$linter_dir"
+          python3 -m venv "$linter_dir/venv"
+          "$linter_dir/venv/bin/python" -m pip install --requirement "$linter_dir/requirements.txt"
+          "$linter_dir/venv/bin/python" "$linter_dir/package_linter.py" .
       - name: Commit immutable release pins
         run: |
           if git diff --quiet; then

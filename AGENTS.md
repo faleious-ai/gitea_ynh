@@ -29,8 +29,17 @@ Maintain the YunoHost package for the official Gitea server. The package tracks 
 ```bash
 python3 tools/validate_package.py
 python3 -m py_compile tools/*.py
-for script in scripts/*; do bash -n "$script"; done
+find scripts -maxdepth 1 -type f ! -name '*.sql' -print0 |
+  sort -z |
+  while IFS= read -r -d '' script; do
+    echo "Checking ${script}"
+    bash -n "$script"
+  done
 ```
+
+The GitHub workflows also run the current official `YunoHost/package_linter`
+procedure: clone the linter, create a virtual environment, install its
+`requirements.txt` and invoke `package_linter.py` against this package.
 
 A release is validated only after fresh install, upgrade from the previous packaged release, backup/restore, removal, HTTP/API checks and service health pass. Do not claim CI success without the exact workflow run and commit SHA.
 

@@ -78,7 +78,7 @@ def download(url: str, destination: Path) -> str:
 
 
 def replace_field(text: str, key: str, value: str) -> str:
-    pattern = re.compile(rf'(?m)^(\s*{re.escape(key)}\s*=\s*)"[^"]*"\s*$')
+    pattern = re.compile(rf'(?m)^([ \t]*{re.escape(key)}[ \t]*=[ \t]*)"[^"]*"[ \t]*$')
     updated, count = pattern.subn(rf'\1"{value}"', text, count=1)
     if count != 1:
         raise RuntimeError(f"unable to update {key}")

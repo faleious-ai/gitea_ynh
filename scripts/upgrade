@@ -11,8 +11,7 @@ ynh_app_setting_set --key=protect_against_basic_auth_spoofing --value=false
 ynh_script_progression 'Ensuring downward compatibility...'
 
 if ynh_app_upgrading_from_version_before 1.6.4~ynh1; then
-    message="Upgrade from $YNH_APP_CURRENT_VERSION was dropped. You need to run this, then upgrade to the latest version:
-sudo yunohost app upgrade $app -u https://github.com/YunoHost-Apps/gitea_ynh/commit/a9ceb157032ae2290e944c1d0a255451ff2d133d"
+    message=$(printf '%s\n%s' "Upgrade from $YNH_APP_CURRENT_VERSION was dropped. You need to run this, then upgrade to the latest version:" "sudo yunohost app upgrade $app -u https://github.com/YunoHost-Apps/gitea_ynh/commit/a9ceb157032ae2290e944c1d0a255451ff2d133d")
     ynh_print_info "$message"
     ynh_die "$message" --ret_code=1
 fi
