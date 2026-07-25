@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import sys
 import tomllib
@@ -64,6 +65,25 @@ def main() -> int:
         errors.append("ALLOWED_HOST_LIST must not remain in the deprecated [webhook] section")
     if not re.search(r"(?m)^[ \t]*ALLOWED_HOST_LIST[ \t]*=", ini_section("security")):
         errors.append("ALLOWED_HOST_LIST must be declared in the [security] section")
+
+    nginx = (ROOT / "conf/nginx.conf").read_text(encoding="utf-8")
+    for required, message in (
+        ("location = __PATH__/.well-known/openid-configuration", "Nginx must harden OIDC discovery metadata"),
+        ("location = __PATH__/.well-known/oauth-authorization-server", "Nginx must expose OAuth authorization-server metadata"),
+        ("sub_filter_types application/json", "OAuth metadata filtering must apply to JSON"),
+        ("sub_filter_once on", "OAuth metadata must be modified only once"),
+        ("sub_filter '\"groups\"' '\"groups\", \"offline_access\"'", "OAuth metadata must advertise offline_access"),
+        ('proxy_set_header Accept-Encoding ""', "OAuth metadata proxy must disable compression for deterministic filtering"),
+    ):
+        if required not in nginx:
+            errors.append(message)
+
+    metadata_fixture = '{"scopes_supported":["openid","profile","email","groups"],"claims_supported":["groups"]}'
+    hardened_metadata = json.loads(metadata_fixture.replace('"groups"', '"groups", "offline_access"', 1))
+    if hardened_metadata.get("scopes_supported") != ["openid", "profile", "email", "groups", "offline_access"]:
+        errors.append("offline_access must be added to scopes_supported")
+    if hardened_metadata.get("claims_supported") != ["groups"]:
+        errors.append("OAuth metadata filtering must not modify claims_supported")
 
     for script in (ROOT / "scripts").iterdir():
         if script.is_file() and b"\r\n" in script.read_bytes():
