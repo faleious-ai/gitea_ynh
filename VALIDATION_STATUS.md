@@ -1,47 +1,128 @@
 # Validation status
 
-Last architecture update: 2026-07-19.
+Last update: 2026-07-27.
 
-## Final package state
+## Released package state
 
-- Package-code HEAD: `9a2c9fcbe1861ecf876b4cdf06b92fa7757999b0`.
-- Final package version: `1.27.0~ynh2`.
-- Gitea remains pinned to stable upstream `1.27.0`; all four architecture assets retain official versioned URLs, SHA-256 values and Sigstore verification.
-- The updater preserves the current `~ynhN` package revision and remains idempotent when the upstream version is already current.
+- Package-code commit:
+  `dbf500011fe742265dfef3aac663a4f9ee709655`.
+- Package version: `1.27.0~ynh3`.
+- Stable upstream: `1.27.0`, with official versioned assets, committed
+  SHA-256 values and Sigstore verification for all four architectures.
+- Package validation:
+  [run 30141243368](https://github.com/faleious-ai/gitea_ynh/actions/runs/30141243368).
+- Stable upstream reconciliation:
+  [run 30141243392](https://github.com/faleious-ai/gitea_ynh/actions/runs/30141243392).
 
-## Root cause and corrections
+Both exact-commit workflows succeeded, including the official YunoHost package
+linter. The published Git blob for `scripts/upgrade` contains 0 CRLF sequences;
+all 126 line endings are LF.
 
-- Gitea 1.27 warned because the package template emitted `ALLOWED_HOST_LIST` under the deprecated `[webhook]` section. The key is now emitted under `[security]`, matching the upstream configuration contract.
-- Install, config-panel apply and upgrade use `ynh_config_add`, which rewrites the managed `app.ini` template and removes the legacy section on existing installations. The local validator now rejects a legacy `[webhook].ALLOWED_HOST_LIST` and requires the `[security]` location.
-- The updater previously reset maintenance revisions to `~ynh1`; it now preserves the existing package revision, allowing this compatibility fix to remain `~ynh2`.
+## OAuth discovery correction
 
-## Commands and evidence
+Gitea 1.27 provides OpenID Connect discovery and refresh tokens, but does not
+advertise `offline_access`. Revision `~ynh3`:
 
-Local Windows checks used the bundled Python runtime and Git Bash because `python3`, Docker and a WSL distribution were unavailable:
+- exposes both `/.well-known/openid-configuration` and the RFC 8414
+  `/.well-known/oauth-authorization-server` alias outside YunoHost SSO;
+- preserves the canonical Gitea issuer, authorization and token endpoints;
+- advertises `offline_access` without changing the claims list;
+- preserves PKCE S256 and the authorization-code and refresh-token grants.
+
+The local validator requires these locations and rejects CRLF in lifecycle
+scripts.
+
+## Real recovery on YunoHost 12
+
+An attempted local-source upgrade on 2026-07-25 used a Windows checkout with
+CRLF. The remote upgrade operation failed before package logic ran:
 
 ```text
-<bundled-python> tools/validate_package.py
-<bundled-python> -m compileall -q tools
-for script in scripts/*; do ...; bash -n $script; done
+./upgrade: line 2: $'\r': command not found
+./upgrade: line 95: syntax error near unexpected token `|'
 ```
 
-Compilation and shell parsing passed locally. The standalone validator reported only the checkout's CRLF conversion; the exact validator, linter, source-hash and Sigstore commands passed in the remote Linux workflow. The full local Gitea updater could not complete because the Windows environment blocked the Cosign/network verification; the remote updater completed successfully.
+The subsequent restore reached Gitea startup but failed because the restored
+`app.ini` database password did not match the existing MariaDB principal. A
+cleanup operation then removed the partially restored app.
 
-Validation runs for the package-code HEAD:
+Recovery on 2026-07-27 used the original `gitea-pre-upgrade2` archive, whose
+SHA-256 was:
 
-- Package validation: [run 29697551505](https://github.com/faleious-ai/gitea_ynh/actions/runs/29697551505).
-- Update stable upstream release: [run 29697551535](https://github.com/faleious-ai/gitea_ynh/actions/runs/29697551535).
+```text
+30bd2f03497ec50e03bcea25629d319887ede4b59c15a52ffb7e77fad371b0a8
+```
 
-Both runs were green, including the official YunoHost package linter. No Node.js 20 warning was present.
+Before any database change, an additional safety set was created at:
 
-## Required before production use
+```text
+/home/yunohost.backup/safety/gitea-recovery-20260727T151507Z
+```
 
-On disposable YunoHost 12 infrastructure, still demonstrate fresh install, upgrade from `1.27.0~ynh1`, login/API, repository push/clone, database/repository/SSH/LFS backup and restore, removal, URL change and reboot health.
+It contains and verifies:
+
+- a byte-identical copy of the original backup and its info JSON;
+- a separate ACL/xattr/numeric-owner archive of the orphan data directory;
+- the pre-recovery empty database schema;
+- the pre-recovery Nginx vhost;
+- `SHA256SUMS` for every file.
+
+The archived database credential was read without printing it and applied to
+the existing empty MariaDB principal. Native restore of `1.27.0~ynh2` then
+succeeded with:
+
+- 4 users;
+- 13 repository database records;
+- 14 Git repository directories in the persistent data directory;
+- active Gitea and valid Nginx configuration.
+
+The native pre-upgrade backup
+`gitea-restored-ynh2-pre-ynh3-20260727T151507Z` was created before upgrading
+from an exact LF archive of package commit `dbf5000`. Upgrade to
+`1.27.0~ynh3` completed successfully.
+
+## Post-recovery contract
+
+The recovered runtime passed:
+
+- Gitea API HTTP 200 and unauthenticated `/api/v1/user` HTTP 401;
+- both OAuth discovery documents HTTP 200;
+- issuer `https://git.asimovart.com.br`;
+- authorization endpoint `/login/oauth/authorize`;
+- token endpoint `/login/oauth/access_token`;
+- PKCE S256, refresh-token grant and `offline_access`;
+- authorization request HTTP 303 without any YunoHost SSO redirect;
+- four preserved registered OAuth applications;
+- Gitea, Gitea Runner and Gitea MCP active with `Result=success`;
+- MCP protected-resource metadata HTTP 200;
+- missing and invalid MCP credentials HTTP 401 with the required
+  `WWW-Authenticate` challenge;
+- authenticated MCP initialize HTTP 200, initialized notification HTTP 202 and
+  53 tools;
+- generated credential absent from Gitea, MCP and Nginx logs;
+- revoked credential rejected with HTTP 401 and zero recovery tokens remaining;
+- Asimov GIT connector identity read as `leivisondias`.
+
+The final native backup is:
+
+```text
+gitea-post-recovery-ynh3-20260727T151750Z
+SHA-256: 089624495e22e9835e35763f1422485049bea45fc7aa0ba29718ff47ea7364c7
+```
+
+Its `backup.csv` explicitly includes `/home/yunohost.app/gitea`, so the final
+archive contains the persistent repository data as well as the database and
+application files.
+
+The unrelated Nextcloud vhost still emits its pre-existing duplicate `wasm`
+MIME warning; Nginx syntax validation succeeds.
+
+## Remaining lifecycle scope
+
+The real recovery, backup, restore, upgrade, OAuth, API and dependent MCP
+contracts are verified. A disposable fresh install, URL change, removal and
+host reboot of `1.27.0~ynh3` were not repeated during this production recovery.
 
 ## Current classification
 
-`AUTOMATION_AND_PACKAGE_LINTER_VERIFIED_UPSTREAM_PIN_VALIDATED_LIFECYCLE_UNVERIFIED`
-
-The lifecycle is intentionally not classified as verified because no YunoHost host was available in this workspace.
-
-Read `AGENTS.md` before continuing.
+`RECOVERED_AND_OAUTH_LIFECYCLE_VERIFIED`
